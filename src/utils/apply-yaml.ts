@@ -1,6 +1,6 @@
 import { loadAll, dump } from 'js-yaml';
 import { k8sCreate, k8sGet, k8sPatch, k8sUpdate, K8sModel, K8sResourceCommon } from '@openshift-console/dynamic-plugin-sdk';
-import { DeploymentModel, modelForKind } from './k8s-models';
+import { DeploymentModel, modelForKind, NamespaceModel } from './k8s-models';
 
 /** Optional PVC annotation: suggested StorageClass. Empty = cluster default. Add UI can override. Never a lab class name in YAML. */
 export const PVC_STORAGE_CLASS_ANNOTATION = 'communitytools.io/storage-class';
@@ -14,7 +14,23 @@ export type ApplyYamlOpts = {
    * `''` omits spec.storageClassName so the cluster default StorageClass is used.
    */
   storageClassName?: string;
+  /** Catalog id stamped on created objects as `communitytools.io/extension`. */
+  extensionId?: string;
 };
+
+/** Label naming the catalog tool that created an object. */
+export const EXTENSION_LABEL = 'communitytools.io/extension';
+/** Kinds that may be shared between tools or are cluster config: never labelled. */
+const UNLABELLED_KINDS = new Set(['Namespace', 'Console']);
+
+/** `doc` with the extension label added (a copy); unchanged for shared kinds or no id. */
+export function withExtensionLabel(doc: K8sResourceCommon, extensionId: string | undefined): K8sResourceCommon {
+  if (!extensionId || UNLABELLED_KINDS.has(doc.kind || '')) return doc;
+  return {
+    ...doc,
+    metadata: { ...doc.metadata, labels: { ...(doc.metadata?.labels || {}), [EXTENSION_LABEL]: extensionId } },
+  };
+}
 
 type PvcDoc = K8sResourceCommon & {
   spec?: {
@@ -38,6 +54,7 @@ const APPLY_KIND_ORDER: Record<string, number> = {
   PersistentVolumeClaim: 80,
   Service: 90,
   Route: 100,
+  NetworkPolicy: 105,
   Deployment: 110,
   ConsolePlugin: 120,
 };
@@ -97,6 +114,53 @@ function sortDocsForApply(docs: K8sResourceCommon[]): K8sResourceCommon[] {
   });
 }
 
+/**
+ * Kinds in `docs` that this storefront cannot apply (not in KIND_MODELS).
+ * Checked for the whole bundle before anything is created, so an install
+ * either applies completely or does not start: a newer catalog row with a kind
+ * this storefront doesn't know must not leave half the objects behind.
+ */
+export function unsupportedKinds(docs: K8sResourceCommon[]): string[] {
+  const missing = docs
+    .filter((d) => !modelForKind(d.kind || ''))
+    .map((d) => `${d.kind || 'Unknown'} (${d.metadata?.name || '(unnamed)'})`);
+  return Array.from(new Set(missing));
+}
+
+/**
+ * Namespaces that namespaced objects in `docs` need but that neither the bundle
+ * creates nor the cluster has (for example a Role in openshift-storage on a cluster
+ * without ODF). Checked before anything is applied, so a bundle that can't work on
+ * this cluster fails cleanly instead of leaving half its objects behind.
+ */
+export async function missingNamespaces(
+  docs: K8sResourceCommon[],
+  exists: (ns: string) => Promise<boolean> = namespaceExists,
+): Promise<string[]> {
+  const created = new Set(docs.filter((d) => d.kind === 'Namespace').map((d) => d.metadata?.name || ''));
+  const needed = new Set<string>();
+  for (const d of docs) {
+    const ns = d.metadata?.namespace;
+    if (ns && !created.has(ns) && modelForKind(d.kind || '')?.namespaced) needed.add(ns);
+  }
+  const missing: string[] = [];
+  for (const ns of Array.from(needed).sort()) {
+    if (!(await exists(ns))) missing.push(ns);
+  }
+  return missing;
+}
+
+async function namespaceExists(ns: string): Promise<boolean> {
+  try {
+    await k8sGet({ model: NamespaceModel, name: ns });
+    return true;
+  } catch (e) {
+    const err = e as { json?: { code?: number }; code?: number };
+    // Only "not found" means missing; forbidden or other errors let the apply try (and report) as before.
+    return !(err?.json?.code === 404 || err?.code === 404);
+  }
+}
+
 function alreadyExists(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   const obj = err as { json?: { reason?: string; code?: number }; message?: string };
@@ -112,15 +176,26 @@ export async function applyYaml(raw: string, opts: ApplyYamlOpts = {}): Promise<
   if (docs.length === 0) {
     throw new Error('No Kubernetes documents found in YAML.');
   }
-  docs = sortDocsForApply(docs.map((d) => withPvcStorageClass(d, opts.storageClassName)));
+  docs = sortDocsForApply(
+    docs.map((d) => withExtensionLabel(withPvcStorageClass(d, opts.storageClassName), opts.extensionId)),
+  );
+  const unsupported = unsupportedKinds(docs);
+  if (unsupported.length > 0) {
+    throw new Error(
+      `Unsupported kind ${unsupported.join(', ')}. Nothing was applied. Include it in the storefront kind map or use a supported plugin manifest.`,
+    );
+  }
+  const missing = await missingNamespaces(docs);
+  if (missing.length > 0) {
+    throw new Error(
+      `Namespace ${missing.join(', ')} does not exist on this cluster, and this bundle puts objects there (it may need an operator, such as ODF, installed first). Nothing was applied.`,
+    );
+  }
   const log: string[] = [];
   for (const doc of docs) {
     const kind = doc.kind || 'Unknown';
     const name = doc.metadata?.name || '(unnamed)';
-    const model = modelForKind(kind);
-    if (!model) {
-      throw new Error(`Unsupported kind ${kind} (${name}). Include it in the storefront kind map or use a supported plugin manifest.`);
-    }
+    const model = modelForKind(kind) as K8sModel;
     try {
       await k8sCreate({ model, data: doc });
       log.push(`created ${kind}/${name}`);
