@@ -133,8 +133,8 @@ for r in rows:
 # From deploy YAMLs
 DEPLOY_IMAGES=""
 if [[ -d "$DEPLOY_DIR" ]]; then
-  DEPLOY_IMAGES=$(grep -rh '^\s*image:' "$DEPLOY_DIR"/*.yaml 2>/dev/null \
-    | sed 's/.*image:\s*//' | tr -d '"' | tr -d "'" | sort -u)
+  DEPLOY_IMAGES=$(grep -rh '^[[:space:]]*image:' "$DEPLOY_DIR"/*.yaml 2>/dev/null \
+    | sed 's/.*image:[[:space:]]*//' | tr -d '"' | tr -d "'" | sort -u)
 fi
 
 ALL_IMAGES=$(echo -e "$CATALOG_IMAGES\n$DEPLOY_IMAGES" | sort -u | grep -v '^$')
@@ -197,8 +197,8 @@ if tool_rows:
 " 2>/dev/null || echo "")
 
     # Get the plugin image from the deploy YAML (first image matching the tool name)
-    DEPLOY_PLUGIN_IMAGE=$(grep -h '^\s*image:' "$deploy_file" 2>/dev/null \
-      | sed 's/.*image:\s*//' | tr -d '"' | tr -d "'" \
+    DEPLOY_PLUGIN_IMAGE=$(grep -h '^[[:space:]]*image:' "$deploy_file" 2>/dev/null \
+      | sed 's/.*image:[[:space:]]*//' | tr -d '"' | tr -d "'" \
       | grep "$tool_name:" | head -1)
 
     if [[ -n "$CATALOG_IMAGE" && -n "$DEPLOY_PLUGIN_IMAGE" ]]; then
@@ -294,6 +294,27 @@ for minor in "${OCP_MINORS[@]}"; do
   fi
 done
 
+# A row may need a newer storefront (versions[].minStorefront), but never one newer
+# than this storefront: it couldn't install its own catalog's row.
+TOO_NEW=$(python3 - "$CATALOG" "$SF_VERSION" <<'PY'
+import sys, yaml
+cat, ver = sys.argv[1], sys.argv[2]
+key = lambda v: tuple(int(x) if x.isdigit() else 0 for x in str(v).split("-")[0].split("."))
+for d in yaml.safe_load_all(open(cat)):
+    if not d:
+        continue
+    for v in d.get("spec", {}).get("versions", []) or []:
+        m = v.get("minStorefront")
+        if m and key(m) > key(ver):
+            print(f'{d["metadata"]["name"]} {v.get("version")} (minStorefront {m})')
+PY
+)
+if [ -n "$TOO_NEW" ]; then
+  while IFS= read -r row; do error "$row needs a newer storefront than STOREFRONT_VERSION $SF_VERSION: bump STOREFRONT_VERSION first"; done <<<"$TOO_NEW"
+else
+  green "no catalog row needs a storefront newer than $SF_VERSION"
+fi
+
 # ── 9. Storefront self-update manifest ──────────────────────────────
 
 echo ""
@@ -321,6 +342,20 @@ if [[ -n "$UNSUPPORTED" ]]; then
   error "deploy/upgrade.yaml has kinds installed storefronts cannot apply: $UNSUPPORTED"
 else
   green "deploy/upgrade.yaml uses only appliable kinds"
+fi
+# Older storefronts apply upgrade.yaml to update themselves, so it must not contain kinds
+# they can't apply (checking against this storefront's own kinds would miss that).
+NEWER=$(python3 - "$UPGRADE_YAML" <<'PY'
+import sys, yaml
+newer = {"NetworkPolicy"}  # appliable from storefront 1.6
+kinds = {d.get("kind") for d in yaml.safe_load_all(open(sys.argv[1])) if isinstance(d, dict)}
+print(" ".join(sorted(kinds & newer)))
+PY
+)
+if [[ -n "$NEWER" ]]; then
+  error "deploy/upgrade.yaml has kinds storefronts before 1.6 cannot apply when they update themselves: $NEWER"
+else
+  green "deploy/upgrade.yaml has no kinds older storefronts cannot apply"
 fi
 BAD_URLS=$(python3 - "$CATALOG" <<'PY'
 import sys, yaml

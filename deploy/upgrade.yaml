@@ -61,6 +61,39 @@ subjects:
   name: oct-storefront-enable-plugin
   namespace: oct-storefront
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: community-tools-policy-reader
+  namespace: oct-storefront
+  labels:
+    app.kubernetes.io/part-of: oct-storefront
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  resourceNames:
+  - community-tools-policy
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: community-tools-policy-reader
+  namespace: oct-storefront
+  labels:
+    app.kubernetes.io/part-of: oct-storefront
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: community-tools-policy-reader
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: system:authenticated
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -81,7 +114,7 @@ spec:
     spec:
       containers:
       - name: plugin
-        image: quay.io/cjanisze/oct-storefront:1.5.25-ocp4.22
+        image: quay.io/openshift-community-tools/oct-storefront:1.5.27-ocp4.22
         ports:
         - containerPort: 9443
           protocol: TCP
@@ -150,8 +183,10 @@ spec:
       serviceAccountName: catalog-service
       containers:
       - name: catalog-service
-        image: quay.io/cjanisze/oct-storefront-catalog:1.0.1-ocp4.22
+        image: quay.io/openshift-community-tools/oct-storefront-catalog:1.0.1-ocp4.22
         env:
+        - name: AUTH_MODE
+          value: audit
         - name: COMMUNITY_TOOLS_CATALOG_URL
           value: https://api.octools.net
         ports:

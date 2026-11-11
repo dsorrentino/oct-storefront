@@ -9,7 +9,7 @@ spec:
     deploy golden images. Register and Deploy open from the inventory.
   category: compute
   source: community
-  git: https://github.com/cjanisze/oct-baremetal
+  git: https://github.com/openshift-community-tools/oct-baremetal
   consolePlugin: oct-baremetal
   href: /baremetal/nodes
   # Bundled storefront SVG (src/assets/tiles/). Not a URL.
@@ -26,17 +26,53 @@ spec:
     - "4.21"
     - "4.22"
   minOpenShift: "4.21"
+  security:
+    schema: 1
+    level: privileged
+    summary: Inventory for Metal3 BareMetalHosts. Registers hosts with the signed-in user's own credentials and serves golden images to Ironic from a cache; only the image files are published by a Route.
+    backend:
+      services: [discovery-service]
+      auth: ssar
+      authModeDefault: audit
+      publicPaths: [/api/v1/image-cache/images/]
+    network:
+      ingress: route
+      networkPolicy: true
+      routes:
+        - { name: image-cache, paths: [/api/v1/image-cache/images/], why: "Ironic downloads golden images over plain HTTP without a user; only the image files are published, the API stays behind the console proxy." }
+      egress:
+        - { host: "BMC addresses entered in the register wizard", why: "Discovery reads hardware details from the BMC (Redfish); only users allowed to create BareMetalHosts in the target namespace can use it." }
+    rbac:
+      rules:
+        - { apiGroups: [cdi.kubevirt.io], resources: [datasources], verbs: [get, list], why: Find the golden image to export. }
+        - { apiGroups: [snapshot.storage.k8s.io], resources: [volumesnapshots, volumesnapshotclasses], verbs: [get, list], why: Find the snapshot behind a golden image. }
+        - { apiGroups: [storage.k8s.io], resources: [storageclasses], verbs: [get, list], why: Pick a StorageClass for exports. }
+        - { apiGroups: [export.kubevirt.io], resources: [virtualmachineexports], verbs: [get, list, create, delete], why: Export golden images into the image cache. }
+        - { apiGroups: [""], resources: [secrets], verbs: [get], why: "Read the token of the VM export it created (get only). Cluster-wide because the image namespace exists only with OpenShift Virtualization, and a Role there would block installing Bare Metal without it; exports are limited to IMAGE_NAMESPACES (default openshift-virtualization-os-images) in code." }
+        - { apiGroups: [""], resources: [persistentvolumeclaims], verbs: [get, list, create, delete], why: Volumes for exported images. }
+        - { apiGroups: [route.openshift.io], resources: [routes], verbs: [get, list], why: Find the image-cache URL to give Ironic. }
+    secrets: { access: cluster, why: "VM export tokens (get only). BMC credentials are created by the signed-in user, not by this tool." }
   versions:
     - version: "0.1.1"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-baremetal:0.1.1-ocp4.21
+      image: quay.io/openshift-community-tools/oct-baremetal:0.1.1-ocp4.21
       gitRef: v0.1.1
     - version: "0.1.1"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-baremetal:0.1.1-ocp4.22
+      image: quay.io/openshift-community-tools/oct-baremetal:0.1.1-ocp4.22
       gitRef: v0.1.1
+    - version: "0.1.2"
+      channel: stable
+      openshift: ["4.21"]
+      image: quay.io/openshift-community-tools/oct-baremetal:0.1.2-ocp4.21
+      gitRef: v0.1.2
+    - version: "0.1.2"
+      channel: stable
+      openshift: ["4.22"]
+      image: quay.io/openshift-community-tools/oct-baremetal:0.1.2-ocp4.22
+      gitRef: v0.1.2
 ---
 apiVersion: communitytools.io/v1alpha1
 kind: CommunityTool
@@ -49,7 +85,7 @@ spec:
     can be selected together. Creates NodeNetworkConfigurationPolicy resources.
   category: network
   source: community
-  git: https://github.com/OOsemka/oct-network-bond
+  git: https://github.com/openshift-community-tools/oct-network-bond
   consolePlugin: oct-network-bond
   href: /community-tools/network/bond
   # Bundled storefront SVG (src/assets/tiles/). Not a URL.
@@ -62,56 +98,68 @@ spec:
     - "4.21"
     - "4.22"
   minOpenShift: "4.21"
+  security:
+    schema: 1
+    level: plugin
+    summary: Browser-only. Creates NodeNetworkConfigurationPolicies (node bonds) with your own permissions; can install the NMState operator if it is missing.
+    network: { ingress: console-only, networkPolicy: true }
+    privileged:
+      scc: []
+      hostAccess: []
+      runtimeCreates:
+        - { kind: NodeNetworkConfigurationPolicy, name: per bond, cleanup: Deleted from the page., why: Changes node networking (cluster-scoped); created with your permissions. }
+        - { kind: Subscription, name: kubernetes-nmstate-operator, why: Installs the NMState operator when it is missing. }
+    secrets: { access: none }
   versions:
     - version: "0.1.1"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-bond:0.1.1-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-bond:0.1.1-ocp4.21
       gitRef: v0.1.1
     - version: "0.1.1"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-bond:0.1.1-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-bond:0.1.1-ocp4.22
       gitRef: v0.1.1
     - version: "0.1.2"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-bond:0.1.2-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-bond:0.1.2-ocp4.21
       gitRef: v0.1.2
     - version: "0.1.2"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-bond:0.1.2-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-bond:0.1.2-ocp4.22
       gitRef: v0.1.2
     - version: "0.2.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-bond:0.2.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-bond:0.2.0-ocp4.21
       gitRef: v0.2.0
     - version: "0.2.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-bond:0.2.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-bond:0.2.0-ocp4.22
       gitRef: v0.2.0
     - version: "0.2.1"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-bond:0.2.1-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-bond:0.2.1-ocp4.21
       gitRef: v0.2.1
     - version: "0.2.1"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-bond:0.2.1-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-bond:0.2.1-ocp4.22
       gitRef: v0.2.1
     - version: "0.2.2"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-bond:0.2.2-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-bond:0.2.2-ocp4.21
       gitRef: v0.2.2
     - version: "0.2.2"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-bond:0.2.2-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-bond:0.2.2-ocp4.22
       gitRef: v0.2.2
 ---
 apiVersion: communitytools.io/v1alpha1
@@ -126,7 +174,7 @@ spec:
     Changes apply cluster-wide.
   category: management
   source: community
-  git: https://github.com/OOsemka/oct-banner
+  git: https://github.com/openshift-community-tools/oct-banner
   consolePlugin: oct-banner
   href: /community-tools/management/banner
   # Bundled storefront SVG (src/assets/tiles/). Not a URL.
@@ -139,36 +187,47 @@ spec:
     - "4.21"
     - "4.22"
   minOpenShift: "4.21"
+  security:
+    schema: 1
+    level: plugin
+    summary: Browser-only. Shows a cluster banner by creating a ConsoleNotification with your own permissions.
+    network: { ingress: console-only, networkPolicy: true }
+    privileged:
+      scc: []
+      hostAccess: []
+      runtimeCreates:
+        - { kind: ConsoleNotification, name: oct-banner, cleanup: Removed when you clear the banner., why: The banner itself (cluster-scoped; created with your permissions). }
+    secrets: { access: none }
   versions:
     - version: "1.1.1"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-banner:1.1.1-ocp4.21
+      image: quay.io/openshift-community-tools/oct-banner:1.1.1-ocp4.21
       gitRef: v1.1.1
     - version: "1.1.1"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-banner:1.1.1-ocp4.22
+      image: quay.io/openshift-community-tools/oct-banner:1.1.1-ocp4.22
       gitRef: v1.1.1
     - version: "1.1.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-banner:1.1.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-banner:1.1.0-ocp4.21
       gitRef: v1.1.0
     - version: "1.1.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-banner:1.1.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-banner:1.1.0-ocp4.22
       gitRef: v1.1.0
     - version: "1.0.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-banner:1.0.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-banner:1.0.0-ocp4.21
       gitRef: v1.0.0
     - version: "1.0.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-banner:1.0.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-banner:1.0.0-ocp4.22
       gitRef: v1.0.0
 ---
 apiVersion: communitytools.io/v1alpha1
@@ -183,7 +242,7 @@ spec:
     No Tekton. Community project, not officially supported by Red Hat.
   category: compute
   source: community
-  git: https://github.com/OOsemka/oct-windows-builder
+  git: https://github.com/openshift-community-tools/oct-windows-builder
   consolePlugin: oct-windows-builder
   href: /community-tools/compute/windows-builder
   # Bundled storefront SVG (src/assets/tiles/). Original paperclip assistant, not Microsoft Clippy art.
@@ -196,206 +255,225 @@ spec:
     - "4.21"
     - "4.22"
   minOpenShift: "4.21"
+  security:
+    schema: 1
+    level: cluster-write
+    summary: Builds sysprepped Windows golden disks for OpenShift Virtualization from an ISO you provide, in the namespace you choose, and points the matching Template at the result.
+    backend:
+      services: [windows-builder]
+      auth: none
+      publicPaths: []
+    network: { ingress: console-only, networkPolicy: false, routes: [], egress: [] }
+    rbac:
+      rules:
+        - { apiGroups: [cdi.kubevirt.io], resources: [datavolumes, datasources, datavolumes/source], verbs: [get, list, watch, create, update, patch, delete], why: Import the ISO and publish the finished disk as a DataSource. }
+        - { apiGroups: [kubevirt.io], resources: [virtualmachines, virtualmachineinstances], verbs: [get, list, watch, create, update, patch, delete], why: The temporary VM that installs and sysprepps Windows. }
+        - { apiGroups: [template.openshift.io], resources: [templates], verbs: [get, list, watch, create, update, patch], why: Point the matching Windows Template at the new DataSource. }
+        - { apiGroups: [""], resources: [configmaps, persistentvolumeclaims], verbs: [get, list, watch, create, update, patch, delete], why: Build scripts and disks in the namespace you choose. }
+        - { apiGroups: [storage.k8s.io], resources: [storageclasses], verbs: [get, list], why: Choose the StorageClass for the disk. }
+        - { apiGroups: [batch], resources: [jobs], verbs: [get, list, watch, create, delete], why: Builder Jobs in its own namespace. }
+        - { apiGroups: [""], resources: [pods, pods/log], verbs: [get, list], why: Build progress from the builder pods' logs (its own namespace). }
+    secrets: { access: none }
   versions:
     - version: "1.0.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.0-ocp4.21
       gitRef: v1.0.0
     - version: "1.0.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.0-ocp4.22
       gitRef: v1.0.0
     - version: "1.0.1"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.1-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.1-ocp4.21
       gitRef: v1.0.1
     - version: "1.0.1"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.1-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.1-ocp4.22
       gitRef: v1.0.1
     - version: "1.0.2"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.2-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.2-ocp4.21
       gitRef: v1.0.2
     - version: "1.0.2"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.2-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.2-ocp4.22
       gitRef: v1.0.2
     - version: "1.0.3"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.3-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.3-ocp4.21
       gitRef: v1.0.3
     - version: "1.0.3"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.3-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.3-ocp4.22
       gitRef: v1.0.3
     - version: "1.0.4"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.4-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.4-ocp4.21
       gitRef: v1.0.4
     - version: "1.0.4"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.4-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.4-ocp4.22
       gitRef: v1.0.4
     - version: "1.0.5"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.5-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.5-ocp4.21
       gitRef: v1.0.5
     - version: "1.0.5"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.5-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.5-ocp4.22
       gitRef: v1.0.5
     - version: "1.0.6"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.6-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.6-ocp4.21
       gitRef: v1.0.6
     - version: "1.0.6"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.6-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.6-ocp4.22
       gitRef: v1.0.6
     - version: "1.0.7"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.7-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.7-ocp4.21
       gitRef: v1.0.7
     - version: "1.0.7"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.7-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.7-ocp4.22
       gitRef: v1.0.7
     - version: "1.0.8"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.8-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.8-ocp4.21
       gitRef: v1.0.8
     - version: "1.0.8"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.8-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.8-ocp4.22
       gitRef: v1.0.8
     - version: "1.0.9"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.9-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.9-ocp4.21
       gitRef: v1.0.9
     - version: "1.0.9"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.9-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.9-ocp4.22
       gitRef: v1.0.9
     - version: "1.0.10"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.10-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.10-ocp4.21
       gitRef: v1.0.10
     - version: "1.0.10"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.10-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.10-ocp4.22
       gitRef: v1.0.10
     - version: "1.0.11"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.11-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.11-ocp4.21
       gitRef: v1.0.11
     - version: "1.0.11"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.11-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.11-ocp4.22
       gitRef: v1.0.11
     - version: "1.0.12"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.12-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.12-ocp4.21
       gitRef: v1.0.12
     - version: "1.0.12"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.12-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.12-ocp4.22
       gitRef: v1.0.12
     - version: "1.0.13"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.13-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.13-ocp4.21
       gitRef: v1.0.13
     - version: "1.0.13"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.13-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.13-ocp4.22
       gitRef: v1.0.13
     - version: "1.0.14"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.14-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.14-ocp4.21
       gitRef: v1.0.14
     - version: "1.0.14"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.14-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.14-ocp4.22
       gitRef: v1.0.14
     - version: "1.0.15"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.15-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.15-ocp4.21
       gitRef: v1.0.15
     - version: "1.0.15"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.15-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.15-ocp4.22
       gitRef: v1.0.15
     - version: "1.0.16"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.16-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.16-ocp4.21
       gitRef: v1.0.16
     - version: "1.0.16"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.16-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.16-ocp4.22
       gitRef: v1.0.16
     - version: "1.0.17"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.17-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.17-ocp4.21
       gitRef: v1.0.17
     - version: "1.0.17"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.17-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.17-ocp4.22
       gitRef: v1.0.17
     - version: "1.0.18"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.18-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.18-ocp4.21
       gitRef: v1.0.18
     - version: "1.0.18"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.18-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.18-ocp4.22
       gitRef: v1.0.18
     - version: "1.0.19"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.19-ocp4.21
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.19-ocp4.21
       gitRef: v1.0.19
     - version: "1.0.19"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-windows-builder:1.0.19-ocp4.22
+      image: quay.io/openshift-community-tools/oct-windows-builder:1.0.19-ocp4.22
       gitRef: v1.0.19
 ---
 apiVersion: communitytools.io/v1alpha1
@@ -411,7 +489,7 @@ spec:
     Red Hat.
   category: storage
   source: community
-  git: https://github.com/OOsemka/oct-storage-bench
+  git: https://github.com/openshift-community-tools/oct-storage-bench
   consolePlugin: oct-storage-bench
   href: /community-tools/storage/bench
   icon: tiles/oct-storage-bench.svg
@@ -423,26 +501,46 @@ spec:
     - "4.21"
     - "4.22"
   minOpenShift: "4.21"
+  security:
+    schema: 1
+    level: privileged
+    summary: Runs FIO and RADOS storage benchmarks as Jobs on the StorageClass or Ceph pool you choose, and shows the results.
+    backend:
+      services: [benchmark-runner]
+      auth: none
+      publicPaths: []
+    network: { ingress: console-only, networkPolicy: false, routes: [], egress: [] }
+    rbac:
+      rules:
+        - { apiGroups: [batch], resources: [jobs], verbs: [get, list, watch, create, delete], why: Run benchmark Jobs and clean them up. }
+        - { apiGroups: [""], resources: [pods, pods/log], verbs: [get, list, watch], why: Read benchmark results from the Job logs. }
+        - { apiGroups: [""], resources: [persistentvolumeclaims], verbs: [get, list, create, delete], why: Test volumes on the StorageClass being measured. }
+        - { apiGroups: [storage.k8s.io], resources: [storageclasses], verbs: [get, list], why: List StorageClasses to benchmark. }
+        - { apiGroups: [""], resources: [secrets], verbs: [get, list], why: "Ceph credentials for RADOS benchmarks. Cluster-wide today; to be limited to openshift-storage." }
+        - { apiGroups: [""], resources: [configmaps], verbs: [get, list, create, update, patch, delete], why: Benchmark settings and saved results. }
+        - { apiGroups: [ceph.rook.io], resources: [cephblockpools, cephclusters], verbs: [get, list, create, delete], why: A temporary pool for RADOS benchmarks. }
+        - { apiGroups: [ocs.openshift.io], resources: [storageclusters], verbs: [get, list], why: Detect ODF. }
+    secrets: { access: cluster, why: Ceph credentials for RADOS benchmarks. }
   versions:
     - version: "0.1.2"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storage-bench:0.1.2-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storage-bench:0.1.2-ocp4.21
       gitRef: v0.1.2
     - version: "0.1.2"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storage-bench:0.1.2-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storage-bench:0.1.2-ocp4.22
       gitRef: v0.1.2
     - version: "0.1.1"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storage-bench:0.1.1-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storage-bench:0.1.1-ocp4.21
       gitRef: v0.1.1
     - version: "0.1.1"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storage-bench:0.1.1-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storage-bench:0.1.1-ocp4.22
       gitRef: v0.1.1
 ---
 apiVersion: communitytools.io/v1alpha1
@@ -459,7 +557,7 @@ spec:
     4.21 or later. Community project, not officially supported by Red Hat.
   category: storage
   source: community
-  git: https://github.com/OOsemka/oct-odf-macvlans
+  git: https://github.com/openshift-community-tools/oct-odf-macvlans
   consolePlugin: oct-odf-macvlans
   href: /community-tools/storage/odf-macvlans
   icon: tiles/oct-odf-macvlans.svg
@@ -470,26 +568,38 @@ spec:
     - "4.21"
     - "4.22"
   minOpenShift: "4.21"
+  security:
+    schema: 1
+    level: plugin
+    summary: Browser-only. Moves ODF traffic to dedicated networks with your own permissions; patches the StorageCluster network settings and creates NodeNetworkConfigurationPolicies and a validation Job.
+    network: { ingress: console-only, networkPolicy: true }
+    privileged:
+      scc: []
+      hostAccess: []
+      runtimeCreates:
+        - { kind: NodeNetworkConfigurationPolicy, name: per network, why: Node interfaces for the storage networks (cluster-scoped); created with your permissions. }
+        - { kind: Role, name: validation grant in openshift-storage, why: Lets Rook's network validation Job run; created with your permissions. }
+    secrets: { access: none }
   versions:
     - version: "0.1.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-odf-macvlans:0.1.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-odf-macvlans:0.1.0-ocp4.21
       gitRef: v0.1.0
     - version: "0.1.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-odf-macvlans:0.1.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-odf-macvlans:0.1.0-ocp4.22
       gitRef: v0.1.0
     - version: "0.1.1"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-odf-macvlans:0.1.1-ocp4.21
+      image: quay.io/openshift-community-tools/oct-odf-macvlans:0.1.1-ocp4.21
       gitRef: v0.1.1
     - version: "0.1.1"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-odf-macvlans:0.1.1-ocp4.22
+      image: quay.io/openshift-community-tools/oct-odf-macvlans:0.1.1-ocp4.22
       gitRef: v0.1.1
 ---
 apiVersion: communitytools.io/v1alpha1
@@ -504,7 +614,7 @@ spec:
     supported by Red Hat.
   category: management
   source: community
-  git: https://github.com/OOsemka/oct-hello-world
+  git: https://github.com/openshift-community-tools/oct-hello-world
   consolePlugin: oct-hello-world
   href: /community-tools/management/hello-world
   icon: tiles/oct-hello-world.svg
@@ -515,16 +625,22 @@ spec:
     - "4.21"
     - "4.22"
   minOpenShift: "4.21"
+  security:
+    schema: 1
+    level: plugin
+    summary: Example console page. No backend, no API access, no RBAC.
+    network: { ingress: console-only, networkPolicy: true }
+    secrets: { access: none }
   versions:
     - version: "1.0.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-hello-world:1.0.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-hello-world:1.0.0-ocp4.21
       gitRef: v1.0.0
     - version: "1.0.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-hello-world:1.0.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-hello-world:1.0.0-ocp4.22
       gitRef: v1.0.0
 ---
 apiVersion: communitytools.io/v1alpha1
@@ -539,7 +655,7 @@ spec:
     manifest from GitHub and applies it.
   category: management
   source: community
-  git: https://github.com/OOsemka/oct-storefront
+  git: https://github.com/openshift-community-tools/oct-storefront
   consolePlugin: oct-storefront
   href: /community-tools/management/storefront
   icon: tiles/oct-storefront.svg
@@ -550,451 +666,495 @@ spec:
     - "4.21"
     - "4.22"
   minOpenShift: "4.21"
+  security:
+    schema: 1
+    level: cluster-write
+    summary: Installs catalog tools with the signed-in user's own credentials after a review screen. Its own permissions are limited to enabling its plugin and reading the cluster policy.
+    backend:
+      services: [catalog-service]
+      auth: ssar
+      authModeDefault: audit
+      publicPaths: []
+    network:
+      ingress: console-only
+      networkPolicy: false
+      routes: []
+      egress:
+        - { host: api.octools.net, why: Public catalog, download counts and ratings (telemetry can be turned off in the cluster policy). }
+    rbac:
+      rules:
+        - { apiGroups: [operator.openshift.io], resources: [consoles], resourceNames: [cluster], verbs: [get, patch], why: The one-time install Job adds the storefront to the console's plugin list. }
+        - { apiGroups: [""], resources: [configmaps], resourceNames: [community-tools-policy], verbs: [get], why: "Every user (and extension backend) can read the cluster policy; nothing else." }
+    secrets: { access: none }
   versions:
     - version: "1.2.5"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.2.5-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.2.5-ocp4.21
       gitRef: v1.2.5
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.2.5"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.2.5-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.2.5-ocp4.22
       gitRef: v1.2.5
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.2.6"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.2.6-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.2.6-ocp4.21
       gitRef: v1.2.6
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.2.6"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.2.6-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.2.6-ocp4.22
       gitRef: v1.2.6
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.2.7"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.2.7-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.2.7-ocp4.21
       gitRef: v1.2.7
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.2.7"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.2.7-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.2.7-ocp4.22
       gitRef: v1.2.7
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.2.8"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.2.8-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.2.8-ocp4.21
       gitRef: v1.2.8
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.2.8"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.2.8-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.2.8-ocp4.22
       gitRef: v1.2.8
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.2.9"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.2.9-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.2.9-ocp4.21
       gitRef: v1.2.9
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.2.9"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.2.9-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.2.9-ocp4.22
       gitRef: v1.2.9
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.4.3"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.4.3-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.4.3-ocp4.21
       gitRef: v1.4.3
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.4.3"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.4.3-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.4.3-ocp4.22
       gitRef: v1.4.3
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.4.4"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.4.4-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.4.4-ocp4.21
       gitRef: v1.4.4
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.4.4"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.4.4-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.4.4-ocp4.22
       gitRef: v1.4.4
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.4.5"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.4.5-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.4.5-ocp4.21
       gitRef: v1.4.5
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.4.5"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.4.5-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.4.5-ocp4.22
       gitRef: v1.4.5
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.4.6"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.4.6-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.4.6-ocp4.21
       gitRef: v1.4.6
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.4.6"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.4.6-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.4.6-ocp4.22
       gitRef: v1.4.6
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.4.7"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.4.7-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.4.7-ocp4.21
       gitRef: v1.4.7
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.4.7"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.4.7-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.4.7-ocp4.22
       gitRef: v1.4.7
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.4.8"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.4.8-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.4.8-ocp4.21
       gitRef: v1.4.8
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.4.8"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.4.8-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.4.8-ocp4.22
       gitRef: v1.4.8
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.4.9"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.4.9-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.4.9-ocp4.21
       gitRef: v1.4.9
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.4.9"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.4.9-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.4.9-ocp4.22
       gitRef: v1.4.9
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.0-ocp4.21
       gitRef: v1.5.0
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.0-ocp4.22
       gitRef: v1.5.0
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.1"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.1-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.1-ocp4.21
       gitRef: v1.5.1
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.1"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.1-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.1-ocp4.22
       gitRef: v1.5.1
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.2"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.2-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.2-ocp4.21
       gitRef: v1.5.2
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.2"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.2-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.2-ocp4.22
       gitRef: v1.5.2
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.3"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.3-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.3-ocp4.21
       gitRef: v1.5.3
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.3"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.3-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.3-ocp4.22
       gitRef: v1.5.3
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.4"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.4-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.4-ocp4.21
       gitRef: v1.5.4
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.4"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.4-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.4-ocp4.22
       gitRef: v1.5.4
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.6"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.6-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.6-ocp4.21
       gitRef: v1.5.6
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.6"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.6-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.6-ocp4.22
       gitRef: v1.5.6
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.7"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.7-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.7-ocp4.21
       gitRef: v1.5.7
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.7"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.7-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.7-ocp4.22
       gitRef: v1.5.7
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.8"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.8-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.8-ocp4.21
       gitRef: v1.5.8
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.8"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.8-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.8-ocp4.22
       gitRef: v1.5.8
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.9"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.9-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.9-ocp4.21
       gitRef: v1.5.9
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.9"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.9-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.9-ocp4.22
       gitRef: v1.5.9
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.10"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.10-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.10-ocp4.21
       gitRef: v1.5.10
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.10"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.10-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.10-ocp4.22
       gitRef: v1.5.10
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.11"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.11-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.11-ocp4.21
       gitRef: v1.5.11
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.11"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.11-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.11-ocp4.22
       gitRef: v1.5.11
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.12"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.12-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.12-ocp4.21
       gitRef: v1.5.12
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.12"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.12-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.12-ocp4.22
       gitRef: v1.5.12
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.13"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.13-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.13-ocp4.21
       gitRef: v1.5.13
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.13"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.13-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.13-ocp4.22
       gitRef: v1.5.13
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.14"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.14-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.14-ocp4.21
       gitRef: v1.5.14
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.14"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.14-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.14-ocp4.22
       gitRef: v1.5.14
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.15"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.15-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.15-ocp4.21
       gitRef: v1.5.15
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.15"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.15-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.15-ocp4.22
       gitRef: v1.5.15
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.16"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.16-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.16-ocp4.21
       gitRef: v1.5.16
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.16"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.16-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.16-ocp4.22
       gitRef: v1.5.16
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.17"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.17-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.17-ocp4.21
       gitRef: v1.5.17
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.17"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.17-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.17-ocp4.22
       gitRef: v1.5.17
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.18"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.18-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.18-ocp4.21
       gitRef: v1.5.18
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.18"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.18-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.18-ocp4.22
       gitRef: v1.5.18
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.19"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.19-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.19-ocp4.21
       gitRef: v1.5.19
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.19"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.19-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.19-ocp4.22
       gitRef: v1.5.19
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.20"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.20-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.20-ocp4.21
       gitRef: v1.5.20
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.20"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.20-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.20-ocp4.22
       gitRef: v1.5.20
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.21"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.21-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.21-ocp4.21
       gitRef: v1.5.21
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.21"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.21-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.21-ocp4.22
       gitRef: v1.5.21
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.22"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.22-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.22-ocp4.21
       gitRef: v1.5.22
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.22"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.22-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.22-ocp4.22
       gitRef: v1.5.22
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.23"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.23-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.23-ocp4.21
       gitRef: v1.5.23
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.23"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.23-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.23-ocp4.22
       gitRef: v1.5.23
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.24"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.24-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.24-ocp4.21
       gitRef: v1.5.24
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.24"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.24-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.24-ocp4.22
       gitRef: v1.5.24
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.25"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-storefront:1.5.25-ocp4.21
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.25-ocp4.21
       gitRef: v1.5.25
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
     - version: "1.5.25"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-storefront:1.5.25-ocp4.22
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.25-ocp4.22
       gitRef: v1.5.25
-      deployURL: https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/upgrade.yaml
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
+    - version: "1.5.26"
+      channel: stable
+      openshift: ["4.21"]
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.26-ocp4.21
+      gitRef: v1.5.26
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
+    - version: "1.5.26"
+      channel: stable
+      openshift: ["4.22"]
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.26-ocp4.22
+      gitRef: v1.5.26
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
+    - version: "1.5.27"
+      channel: stable
+      openshift: ["4.21"]
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.27-ocp4.21
+      gitRef: v1.5.27
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
+    - version: "1.5.27"
+      channel: stable
+      openshift: ["4.22"]
+      image: quay.io/openshift-community-tools/oct-storefront:1.5.27-ocp4.22
+      gitRef: v1.5.27
+      deployURL: https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/upgrade.yaml
 ---
 apiVersion: communitytools.io/v1alpha1
 kind: CommunityTool
@@ -1007,7 +1167,7 @@ spec:
     configure OVN bridge-mappings, and manage bridges by MachineConfigPool.
   category: network
   source: community
-  git: https://github.com/OOsemka/oct-network-bridge
+  git: https://github.com/openshift-community-tools/oct-network-bridge
   consolePlugin: oct-network-bridge
   href: /community-tools/network/bridge
   icon: tiles/oct-network-bridge.svg
@@ -1018,66 +1178,78 @@ spec:
     - "4.21"
     - "4.22"
   minOpenShift: "4.21"
+  security:
+    schema: 1
+    level: plugin
+    summary: Browser-only. Creates NodeNetworkConfigurationPolicies (Linux and OVS bridges) with your own permissions; can install the NMState operator if it is missing.
+    network: { ingress: console-only, networkPolicy: true }
+    privileged:
+      scc: []
+      hostAccess: []
+      runtimeCreates:
+        - { kind: NodeNetworkConfigurationPolicy, name: per bridge, cleanup: Deleted from the page., why: Changes node networking (cluster-scoped); created with your permissions. }
+        - { kind: Subscription, name: kubernetes-nmstate-operator, why: Installs the NMState operator when it is missing. }
+    secrets: { access: none }
   versions:
     - version: "1.0.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-bridge:1.0.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-bridge:1.0.0-ocp4.21
       gitRef: v1.0.0
     - version: "1.0.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-bridge:1.0.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-bridge:1.0.0-ocp4.22
       gitRef: v1.0.0
     - version: "1.1.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-bridge:1.1.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-bridge:1.1.0-ocp4.21
       gitRef: v1.1.0
     - version: "1.1.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-bridge:1.1.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-bridge:1.1.0-ocp4.22
       gitRef: v1.1.0
     - version: "1.1.1"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-bridge:1.1.1-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-bridge:1.1.1-ocp4.21
       gitRef: v1.1.1
     - version: "1.1.1"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-bridge:1.1.1-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-bridge:1.1.1-ocp4.22
       gitRef: v1.1.1
     - version: "1.1.2"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-bridge:1.1.2-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-bridge:1.1.2-ocp4.21
       gitRef: v1.1.2
     - version: "1.1.2"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-bridge:1.1.2-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-bridge:1.1.2-ocp4.22
       gitRef: v1.1.2
     - version: "1.1.3"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-bridge:1.1.3-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-bridge:1.1.3-ocp4.21
       gitRef: v1.1.3
     - version: "1.1.3"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-bridge:1.1.3-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-bridge:1.1.3-ocp4.22
       gitRef: v1.1.3
     - version: "1.1.4"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-bridge:1.1.4-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-bridge:1.1.4-ocp4.21
       gitRef: v1.1.4
     - version: "1.1.4"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-bridge:1.1.4-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-bridge:1.1.4-ocp4.22
       gitRef: v1.1.4
 ---
 apiVersion: communitytools.io/v1alpha1
@@ -1091,7 +1263,7 @@ spec:
     OVN ClusterUserDefinedNetworks with localnet topology.
   category: network
   source: community
-  git: https://github.com/OOsemka/oct-network-vlan
+  git: https://github.com/openshift-community-tools/oct-network-vlan
   consolePlugin: oct-network-vlan
   href: /community-tools/network/vlan
   icon: tiles/oct-network-vlan.svg
@@ -1102,66 +1274,78 @@ spec:
     - "4.21"
     - "4.22"
   minOpenShift: "4.21"
+  security:
+    schema: 1
+    level: plugin
+    summary: Browser-only. Creates VLAN networks (ClusterUserDefinedNetworks, NetworkAttachmentDefinitions and their namespaces) with your own permissions; can install the NMState operator if it is missing.
+    network: { ingress: console-only, networkPolicy: true }
+    privileged:
+      scc: []
+      hostAccess: []
+      runtimeCreates:
+        - { kind: ClusterUserDefinedNetwork, name: per VLAN, cleanup: Deleted from the page., why: The VLAN network (cluster-scoped); created with your permissions. }
+        - { kind: Subscription, name: kubernetes-nmstate-operator, why: Installs the NMState operator when it is missing. }
+    secrets: { access: none }
   versions:
     - version: "1.0.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-vlan:1.0.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-vlan:1.0.0-ocp4.21
       gitRef: v1.0.0
     - version: "1.0.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-vlan:1.0.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-vlan:1.0.0-ocp4.22
       gitRef: v1.0.0
     - version: "1.1.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-vlan:1.1.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-vlan:1.1.0-ocp4.21
       gitRef: v1.1.0
     - version: "1.1.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-vlan:1.1.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-vlan:1.1.0-ocp4.22
       gitRef: v1.1.0
     - version: "1.1.2"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-vlan:1.1.2-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-vlan:1.1.2-ocp4.21
       gitRef: v1.1.2
     - version: "1.1.2"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-vlan:1.1.2-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-vlan:1.1.2-ocp4.22
       gitRef: v1.1.2
     - version: "1.1.3"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-vlan:1.1.3-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-vlan:1.1.3-ocp4.21
       gitRef: v1.1.3
     - version: "1.1.3"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-vlan:1.1.3-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-vlan:1.1.3-ocp4.22
       gitRef: v1.1.3
     - version: "1.1.4"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-vlan:1.1.4-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-vlan:1.1.4-ocp4.21
       gitRef: v1.1.4
     - version: "1.1.4"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-vlan:1.1.4-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-vlan:1.1.4-ocp4.22
       gitRef: v1.1.4
     - version: "1.1.5"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-vlan:1.1.5-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-vlan:1.1.5-ocp4.21
       gitRef: v1.1.5
     - version: "1.1.5"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-vlan:1.1.5-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-vlan:1.1.5-ocp4.22
       gitRef: v1.1.5
 ---
 apiVersion: communitytools.io/v1alpha1
@@ -1176,7 +1360,7 @@ spec:
     Supports both Linux bridge and OVN-based secondary networks.
   category: network
   source: community
-  git: https://github.com/OOsemka/oct-network-dhcp
+  git: https://github.com/openshift-community-tools/oct-network-dhcp
   consolePlugin: oct-network-dhcp
   href: /community-tools/network/dhcp
   icon: tiles/oct-network-dhcp.svg
@@ -1187,76 +1371,89 @@ spec:
     - "4.21"
     - "4.22"
   minOpenShift: "4.21"
+  security:
+    schema: 1
+    level: plugin
+    summary: Browser-only plugin that deploys DHCP servers with your own permissions. Each server needs raw network access, so the plugin creates a dedicated SCC and grants it to the server's ServiceAccount.
+    network: { ingress: console-only }
+    privileged:
+      scc: []
+      hostAccess: []
+      runtimeCreates:
+        - { kind: SecurityContextConstraints, name: oct-dhcp-netraw, cleanup: Deleted with the last DHCP server., why: "dnsmasq runs as root with only NET_RAW, NET_BIND_SERVICE and NET_ADMIN, no privilege escalation, the default seccomp profile, no host network, not privileged. Labelled communitytools.io/extension: oct-network-dhcp, so the admission policy pack's SCC approval applies." }
+        - { kind: ClusterRole, name: oct-dhcp-netraw-use, cleanup: Deleted with the last DHCP server., why: Grants use of the oct-dhcp-netraw SCC. }
+        - { kind: RoleBinding, name: per DHCP server, cleanup: Deleted with the server., why: "Lets that server's ServiceAccount use the SCC, in the server's namespace only." }
+    secrets: { access: none }
   versions:
     - version: "1.0.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-dhcp:1.0.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-dhcp:1.0.0-ocp4.21
       gitRef: v1.0.0
     - version: "1.0.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-dhcp:1.0.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-dhcp:1.0.0-ocp4.22
       gitRef: v1.0.0
     - version: "1.0.1"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-dhcp:1.0.1-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-dhcp:1.0.1-ocp4.21
       gitRef: v1.0.1
     - version: "1.0.1"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-dhcp:1.0.1-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-dhcp:1.0.1-ocp4.22
       gitRef: v1.0.1
     - version: "1.0.2"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-dhcp:1.0.2-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-dhcp:1.0.2-ocp4.21
       gitRef: v1.0.2
     - version: "1.0.2"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-dhcp:1.0.2-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-dhcp:1.0.2-ocp4.22
       gitRef: v1.0.2
     - version: "1.0.3"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-dhcp:1.0.3-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-dhcp:1.0.3-ocp4.21
       gitRef: v1.0.3
     - version: "1.0.3"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-dhcp:1.0.3-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-dhcp:1.0.3-ocp4.22
       gitRef: v1.0.3
     - version: "1.0.4"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-dhcp:1.0.4-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-dhcp:1.0.4-ocp4.21
       gitRef: v1.0.4
     - version: "1.0.4"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-dhcp:1.0.4-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-dhcp:1.0.4-ocp4.22
       gitRef: v1.0.4
     - version: "1.0.5"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-dhcp:1.0.5-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-dhcp:1.0.5-ocp4.21
       gitRef: v1.0.5
     - version: "1.0.5"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-dhcp:1.0.5-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-dhcp:1.0.5-ocp4.22
       gitRef: v1.0.5
     - version: "1.0.6"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-network-dhcp:1.0.6-ocp4.21
+      image: quay.io/openshift-community-tools/oct-network-dhcp:1.0.6-ocp4.21
       gitRef: v1.0.6
     - version: "1.0.6"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-network-dhcp:1.0.6-ocp4.22
+      image: quay.io/openshift-community-tools/oct-network-dhcp:1.0.6-ocp4.22
       gitRef: v1.0.6
 ---
 apiVersion: communitytools.io/v1alpha1
@@ -1275,7 +1472,7 @@ spec:
     there.
   category: compute
   source: community
-  git: https://github.com/OOsemka/oct-shift-on-shift-virt
+  git: https://github.com/openshift-community-tools/oct-shift-on-shift-virt
   consolePlugin: oct-shift-on-shift-virt
   href: /community-tools/compute/shift-on-shift-virt
   icon: tiles/oct-shift-on-shift-virt.svg
@@ -1290,154 +1487,252 @@ spec:
   validatedOn:
     - "4.22"
   minOpenShift: "4.21"
+  security:
+    schema: 1
+    level: privileged
+    summary: Deploys standalone OpenShift clusters on KubeVirt VMs, by installing them or by cloning a master cluster's disk snapshots (Express). Each nested cluster gets its own namespace, network, VMs, disks and helper services, managed by an orchestrator through the NestedCluster API.
+    backend:
+      services: [sos-orchestrator]
+      auth: ssar
+      authModeDefault: audit
+      publicPaths: []
+    network: { ingress: console-only, networkPolicy: true, routes: [], egress: [] }
+    rbac:
+      rules:
+        - { apiGroups: [""], resources: [namespaces], verbs: [get, list, watch, create, delete], why: "One namespace per nested cluster; only namespaces it created are ever deleted." }
+        - { apiGroups: [kubevirt.io, subresources.kubevirt.io], resources: [virtualmachines, virtualmachineinstances], verbs: [get, list, watch, create, update, patch, delete], why: The nested cluster's control-plane and worker VMs and the bastion. }
+        - { apiGroups: [cdi.kubevirt.io, snapshot.storage.k8s.io, storage.k8s.io], resources: [datavolumes, volumeimportsources, storageprofiles, volumesnapshots, volumesnapshotcontents, volumesnapshotclasses, storageclasses], verbs: [get, list, watch, create, update, patch, delete], why: VM disks and the optional nested storage (KubeVirt CSI). }
+        - { apiGroups: [k8s.ovn.org, k8s.cni.cncf.io], resources: [clusteruserdefinednetworks, network-attachment-definitions, ipamclaims], verbs: [get, list, watch, create, update, patch, delete], why: A user-defined network per nested cluster. }
+        - { apiGroups: [security.openshift.io], resources: [securitycontextconstraints], resourceNames: [anyuid], verbs: [use], why: Helper pods (HAProxy, DNS) that run as a fixed UID. }
+        - { apiGroups: [""], resources: [secrets, configmaps, services, serviceaccounts, endpoints, persistentvolumeclaims, resourcequotas], verbs: [get, list, watch, create, update, patch, delete], why: "Each nested cluster's pull secret, kubeconfig and install config, the Services for its API and ingress, and a quota for its namespace." }
+        - { apiGroups: ["", apps, batch, discovery.k8s.io], resources: [pods, pods/exec, pods/log, deployments, jobs, endpointslices], verbs: [get, list, watch, create, update, patch, delete], why: "Helper deployments and install jobs; reads install logs and runs the network self-test (exec)." }
+        - { apiGroups: [route.openshift.io, config.openshift.io, operator.openshift.io], resources: [routes, infrastructures, dnses, ingresscontrollers], verbs: [get, list, watch, create, update, patch, delete], why: "Optionally publishes the nested API and console, and with publishAppRoutes the nested cluster's own app routes, through host Routes; reads the host domain." }
+        - { apiGroups: [rbac.authorization.k8s.io], resources: [clusterroles, clusterrolebindings, roles, rolebindings], verbs: [get, list, create, update, patch, delete], why: RBAC for components it deploys for each nested cluster (for example the KubeVirt CSI driver's access to its namespace on the host). }
+        - { apiGroups: [octools.io], resources: [nestedclusters, nestedclusters/status, ippools], verbs: [get, list, watch, create, update, patch, delete], why: Its own NestedCluster API and IP pools. }
+        - { apiGroups: [""], resources: [nodes, persistentvolumes], verbs: [get, list], why: Check host capacity and volume binding. }
+    privileged:
+      scc: [anyuid]
+      hostAccess: []
+      runtimeCreates:
+        - { kind: Namespace, name: per nested cluster, cleanup: Deleted with the nested cluster (only namespaces it created)., why: Isolates each nested cluster. }
+        - { kind: ClusterUserDefinedNetwork, name: per nested cluster, why: The nested cluster's internal network. }
+        - { kind: Route, name: per nested cluster (optional), why: "Publishes the nested API and console on the host's apps domain when externalAccess.hostRoutes is on. With externalAccess.publishAppRoutes it also publishes every route of the nested cluster outside openshift-* and kube-* namespaces under the host's *.apps (a route opts out with the annotation sos.octools.io/publish-host-route=false)." }
+    secrets: { access: cluster, why: Nested clusters' pull secrets and kubeconfigs in their namespaces (granted cluster-wide today). }
   versions:
     - version: "0.1.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.1.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.1.0-ocp4.21
       gitRef: v0.1.0
     - version: "0.1.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.1.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.1.0-ocp4.22
       gitRef: v0.1.0
     - version: "0.2.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.2.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.2.0-ocp4.21
       gitRef: v0.2.0
     - version: "0.2.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.2.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.2.0-ocp4.22
       gitRef: v0.2.0
     - version: "0.2.1"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.2.1-ocp4.21
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.2.1-ocp4.21
       gitRef: v0.2.1
     - version: "0.2.1"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.2.1-ocp4.22
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.2.1-ocp4.22
       gitRef: v0.2.1
     - version: "0.2.2"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.2.2-ocp4.21
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.2.2-ocp4.21
       gitRef: v0.2.2
     - version: "0.2.2"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.2.2-ocp4.22
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.2.2-ocp4.22
       gitRef: v0.2.2
     - version: "0.3.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.3.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.3.0-ocp4.21
       gitRef: v0.3.0
     - version: "0.3.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.3.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.3.0-ocp4.22
       gitRef: v0.3.0
     - version: "0.3.1"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.3.1-ocp4.21
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.3.1-ocp4.21
       gitRef: v0.3.1
     - version: "0.3.1"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.3.1-ocp4.22
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.3.1-ocp4.22
       gitRef: v0.3.1
     - version: "0.3.2"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.3.2-ocp4.21
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.3.2-ocp4.21
       gitRef: v0.3.2
     - version: "0.3.2"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.3.2-ocp4.22
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.3.2-ocp4.22
       gitRef: v0.3.2
     - version: "0.4.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.4.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.4.0-ocp4.21
       gitRef: v0.4.0
     - version: "0.4.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.4.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.4.0-ocp4.22
       gitRef: v0.4.0
     - version: "0.4.1"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.4.1-ocp4.21
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.4.1-ocp4.21
       gitRef: v0.4.1
     - version: "0.4.1"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.4.1-ocp4.22
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.4.1-ocp4.22
       gitRef: v0.4.1
     - version: "0.4.2"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.4.2-ocp4.21
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.4.2-ocp4.21
       gitRef: v0.4.2
     - version: "0.4.2"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.4.2-ocp4.22
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.4.2-ocp4.22
       gitRef: v0.4.2
     - version: "0.4.4"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.4.4-ocp4.21
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.4.4-ocp4.21
       gitRef: v0.4.4
     - version: "0.4.4"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.4.4-ocp4.22
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.4.4-ocp4.22
       gitRef: v0.4.4
     - version: "0.5.0"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.5.0-ocp4.21
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.5.0-ocp4.21
       gitRef: v0.5.0
     - version: "0.5.0"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.5.0-ocp4.22
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.5.0-ocp4.22
       gitRef: v0.5.0
     - version: "0.5.1"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.5.1-ocp4.21
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.5.1-ocp4.21
       gitRef: v0.5.1
     - version: "0.5.1"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.5.1-ocp4.22
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.5.1-ocp4.22
       gitRef: v0.5.1
     - version: "0.5.2"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.5.2-ocp4.21
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.5.2-ocp4.21
       gitRef: v0.5.2
     - version: "0.5.2"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.5.2-ocp4.22
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.5.2-ocp4.22
       gitRef: v0.5.2
     - version: "0.5.3"
       channel: stable
       openshift: ["4.21"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.5.3-ocp4.21
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.5.3-ocp4.21
       gitRef: v0.5.3
     - version: "0.5.3"
       channel: stable
       openshift: ["4.22"]
-      image: quay.io/cjanisze/oct-shift-on-shift-virt:0.5.3-ocp4.22
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.5.3-ocp4.22
       gitRef: v0.5.3
+    - version: "0.5.4"
+      channel: stable
+      openshift: ["4.21"]
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.5.4-ocp4.21
+      gitRef: v0.5.4
+    - version: "0.5.4"
+      channel: stable
+      openshift: ["4.22"]
+      image: quay.io/openshift-community-tools/oct-shift-on-shift-virt:0.5.4-ocp4.22
+      gitRef: v0.5.4
+---
+apiVersion: communitytools.io/v1alpha1
+kind: CommunityTool
+metadata:
+  name: oct-must-gather
+spec:
+  displayName: Must-Gather
+  description: >-
+    Run oc adm must-gather on this cluster from the console: full,
+    networking, storage, virtualization, serverless, GitOps or Service Mesh,
+    optionally with audit logs and must-gather-clean obfuscation. Downloads
+    the archive with Red Hat's recommended file name, ready to attach to a
+    support case. Runs with your own credentials (cluster-admin). Community
+    project, not officially supported by Red Hat.
+  category: management
+  source: community
+  git: https://github.com/dwaiting/oct-must-gather
+  consolePlugin: oct-must-gather
+  href: /community-tools/management/must-gather
+  icon: tiles/oct-must-gather.svg
+  # The bundle adds the runner Deployment (oc + must-gather-clean), its
+  # Service and ServiceAccount (no RBAC), and the ConsolePlugin proxy with
+  # UserToken authorization. The runner image is built per OCP minor; the
+  # bundle uses the -ocp4.22 runner (oc 4.22 supports 4.21 clusters).
+  security:
+    schema: 1
+    level: namespaced
+    summary: Runs oc adm must-gather with your own credentials (cluster-admin needed for a full gather) and lets you download the archive. The runner's ServiceAccount has no RBAC; jobs and archives are visible only to the user who started them and expire after 4 hours.
+    backend:
+      services: [must-gather-runner]
+      auth: tokenreview
+      publicPaths: []
+    network: { ingress: console-only, networkPolicy: false, routes: [], egress: [] }
+    privileged:
+      scc: []
+      hostAccess: []
+      runtimeCreates:
+        - { kind: Namespace, name: "openshift-must-gather-* (temporary)", cleanup: Removed by oc adm must-gather when the gather ends., why: "oc adm must-gather runs its gather pod (privileged, on a node) in a temporary namespace; created with your permissions, not the runner's." }
+    secrets: { access: none }
+  defaultChannel: stable
+  channels:
+    stable: {}
+  validatedOn:
+    - "4.21"
+    - "4.22"
+  minOpenShift: "4.21"
+  versions:
+    - version: "0.1.1"
+      channel: stable
+      openshift: ["4.21"]
+      image: quay.io/openshift-community-tools/oct-must-gather:0.1.1-ocp4.21
+      gitRef: v0.1.1
+    - version: "0.1.1"
+      channel: stable
+      openshift: ["4.22"]
+      image: quay.io/openshift-community-tools/oct-must-gather:0.1.1-ocp4.22
+      gitRef: v0.1.1

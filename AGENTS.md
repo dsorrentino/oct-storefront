@@ -17,7 +17,7 @@ Directory (preferred): `oct-storefront`. Plugin ID: **`oct-storefront`**.
 
 This webpack bundle must **not** contain extension pages. Hubs list tiles; **Open** goes to the extension plugin. Do not rename plugin ID `oct-storefront` (breaking install). Do not `oc apply` unless asked.
 
-**Current version:** `1.5.25` (package.json / consolePlugin.version). Companion `catalog-service` image: `oct-storefront-catalog:1.0.1`.
+**Current version:** `1.5.27` (package.json / consolePlugin.version). Companion `catalog-service` image: `oct-storefront-catalog:1.0.1`.
 
 Hub pages show when the public catalog was last checked, with **Check for updates** (`refreshPublicCatalogIntoCache(true)` skips the one-hour `SYNC_TTL_MS`). The automatic sync still runs at most hourly on a Community Tools page load.
 
@@ -33,7 +33,7 @@ Hub routes are registered as `console.page/route` extensions in `console-extensi
 | **community-tools-cache** ConfigMap | Namespace `oct-storefront`. Seeded from bundled `catalog/community.yaml` on first hub mount; refreshed from public catalog via proxy. Keys: `community.yaml`, `stats.json`, `sync.json` (`checkedAt`/`ok`/`source`), `installed.json`, `bundled-version`. The public catalog is re-fetched on a hub page load when the last successful sync is older than **1 hour** (`SYNC_TTL_MS`), so a newly seeded release reaches clusters within about an hour of someone opening Community Tools. A storefront version change re-seeds from the bundled catalog (keeping `installed.json`). On public failure, fail-opens to cache/bundled. |
 | **community-tools-external** ConfigMap | Sibling CM for externally-added YAML tools. |
 | **useCatalog** hook (`src/utils/catalog-actions.ts`, `src/components/catalog/useCatalog.ts`) | `ensureCacheSeeded` → `refreshPublicCatalogIntoCache` → merge cache + external; `CategoryHubPage` renders `ExtensionTile`s. Tiles are not fetched live from the service on every render. |
-| **Tile icons** (`src/utils/tile-icons.ts`, `src/assets/tiles/`) | Bundled SVGs registered under keys like `oct-baremetal`, `tiles/oct-baremetal.svg`. `resolveTileIcon` tries `spec.icon` → `metadata.name` → `consolePlugin`. Registered: `oct-baremetal`, `oct-banner`, `oct-network-bond`, `oct-network-bridge`, `oct-network-dhcp`, `oct-network-vlan`, `oct-hello-world`, `oct-storage-bench`, `oct-odf-macvlans`, `oct-storefront`, `oct-windows-builder`, `oct-shift-on-shift-virt`. |
+| **Tile icons** (`src/utils/tile-icons.ts`, `src/assets/tiles/`) | Bundled SVGs registered under keys like `oct-baremetal`, `tiles/oct-baremetal.svg`. `resolveTileIcon` tries `spec.icon` → `metadata.name` → `consolePlugin`. Registered: `oct-baremetal`, `oct-banner`, `oct-network-bond`, `oct-network-bridge`, `oct-network-dhcp`, `oct-network-vlan`, `oct-hello-world`, `oct-storage-bench`, `oct-odf-macvlans`, `oct-storefront`, `oct-windows-builder`, `oct-shift-on-shift-virt`, `oct-must-gather`. |
 
 Proxy: `/api/proxy/plugin/oct-storefront/catalog-service`.
 
@@ -177,6 +177,17 @@ Canonical checklist: `docs/extension-standard.md`. Do not `oc apply` unless aske
 ## No environment-specific hardcoding
 
 Never bake in a lab StorageClass, VLAN, CIDR, hostname, or similar. Omit the field (cluster default), read the live cluster, or use the value chosen at Add. Rule: `.cursor/rules/oct-no-env-hardcoding.mdc`.
+
+## Security
+
+Model and reasoning: `docs/security-model.md`. Rule: `.cursor/rules/oct-security.mdc`.
+
+- **Declare → Derive → Decide.** `spec.security` (parsed by `src/utils/security-spec.ts`) is the contributor's intent. `src/utils/security-profile.ts` derives the real profile from manifests, used by both the storefront and CI; it is the source of truth. `src/utils/policy.ts` evaluates the cluster policy (ConfigMap `community-tools-policy`, read with `loadPolicy()`; absent means defaults). A declaration never relaxes a rule.
+- **Every install goes through `prepareInstall()` and the review gate in `useCatalog`.** Never call `addExtension` without `reviewedYaml` from a prepared install, and never add a path that applies YAML around the gate.
+- **Keep the kind allow-list tight** (`k8s-models.ts` `KIND_MODELS`). No SCCs, admission policies or webhooks. A new kind needs `versions[].minStorefront` on rows that use it.
+- **Telemetry:** only Add counts a download; public posts go through `telemetryAllows(policy, …)`.
+- **Backends** use `backend-security-kit/` (stdlib only; its own CI job). Keep it free of dependencies.
+- **CI:** `yarn security-check --strict` fails on hard rules (Secret with data in a bundle, NetworkPolicy row without `minStorefront`), on new findings against `catalog/security-baseline.json`, on stale baseline entries (fixed but still listed), on declarations that don't match their bundle, and on declaration drift: when a declared tool's bundle changes beyond image tags and version labels, check that `spec.security` still describes it and run `yarn security-check --mark-reviewed <tool>`. When a tool is fixed, shrink the baseline with `--update-baseline`; never add to it to make CI pass without saying why in the PR.
 
 ## Stats / fail-open
 

@@ -6,14 +6,14 @@ This repository is the **storefront**: left-nav **Community Tools** and category
 
 - **Plugin ID:** `oct-storefront`
 - **OpenShift:** 4.22 (PatternFly 6)
-- **Images:** `quay.io/cjanisze/oct-storefront:1.5.25-ocp4.22` (plugin UI; also publish `:1.5.25-ocp4.21`) and `quay.io/cjanisze/oct-storefront-catalog:1.0.1-ocp4.22` / `-ocp4.21` (catalog-service; no webpack UI)
+- **Images:** `quay.io/openshift-community-tools/oct-storefront:1.5.27-ocp4.22` (plugin UI; also publish `:1.5.27-ocp4.21`) and `quay.io/openshift-community-tools/oct-storefront-catalog:1.0.1-ocp4.22` / `-ocp4.21` (catalog-service; no webpack UI)
 
 ## Install (one command)
 
 Cluster-admin.
 
 ```bash
-oc apply -f https://raw.githubusercontent.com/OOsemka/oct-storefront/main/deploy/install.yaml
+oc apply -f https://raw.githubusercontent.com/openshift-community-tools/oct-storefront/main/deploy/install.yaml
 ```
 
 Then:
@@ -46,6 +46,14 @@ Navigation uses `useNavigate` from `react-router-dom-v5-compat` (React Router v6
 5. Open a PR against [`catalog/community.yaml`](catalog/community.yaml) in this repo. Ship an original tile SVG in `src/assets/tiles/`, register it in `src/utils/tile-icons.ts`, and set `spec.icon` (same value in `deploy/install.yaml`).
 
 **Add can succeed while the plugin never becomes Ready** (Open then 404s). Confirm the plugin Deployment is Running. Canonical checklist: [docs/extension-standard.md](docs/extension-standard.md).
+
+## Security
+
+Extensions are installed with a cluster admin's credentials, so the storefront shows what each one will create before you install it (the **review screen**: privilege level, permissions with the author's reasons, Routes, images, findings) and applies exactly what you reviewed. Everything else is opt-in:
+
+- **For cluster admins:** [docs/security-guide.md](docs/security-guide.md): reading the review screen, the **Cluster policy** page (Community Tools → any hub → View the cluster policy), policy examples, turning on backend permission checks per extension, rolling out the admission policy pack (warn → watch → enforce), and troubleshooting.
+- **For extension authors:** [docs/extension-standard.md](docs/extension-standard.md#security), including a migration checklist for existing extensions, and [`backend-security-kit`](backend-security-kit/README.md) for backends.
+- **How it works:** [docs/security-model.md](docs/security-model.md). **Reporting a vulnerability:** [SECURITY.md](SECURITY.md).
 
 ## Contributing
 
